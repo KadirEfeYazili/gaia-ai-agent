@@ -1,2 +1,19 @@
+# --- Web UI ---
+# On Hugging Face Spaces the Gradio version is pinned by `sdk_version` in
+# README.md; listing it here also makes `pip install -r` work locally.
 gradio
 requests
+pandas
+
+# --- Agent framework + Gemini (LiteLLM) backend + default toolkit ---
+# `toolkit` brings the web-search / page-fetch deps (ddgs, markdownify);
+# `litellm` brings the multi-provider model backend used for Gemini.
+smolagents[toolkit,litellm]>=1.26.0,<2.0.0
+
+# --- Local .env support for development (ignored on Spaces, which uses secrets) ---
+python-dotenv
+
+# --- Parsers used by the agent when reading GAIA attachments ---
+openpyxl        # .xlsx spreadsheets (via pandas.read_excel)
+beautifulsoup4  # HTML parsing
+pillow          # image loading for vision questions
