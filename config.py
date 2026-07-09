@@ -61,13 +61,21 @@ class AgentConfig:
     model_provider: str = os.getenv("GAIA_MODEL_PROVIDER", "litellm")
     api_base: str | None = os.getenv("GAIA_API_BASE") or None
     temperature: float = _env_float("GAIA_TEMPERATURE", 0.1)
-    max_steps: int = _env_int("GAIA_MAX_STEPS", 5)
-    max_tokens: int = _env_int("GAIA_MAX_TOKENS", 300)
+    max_steps: int = _env_int("GAIA_MAX_STEPS", 6)
+    max_tokens: int = _env_int("GAIA_MAX_TOKENS", 2048)
     request_timeout: int = _env_int("GAIA_REQUEST_TIMEOUT", 60)
     verbose: bool = _env_bool("GAIA_VERBOSE", False)
     # Retry transient model/network errors (503/429/DNS blips) this many times.
     max_retries: int = _env_int("GAIA_MAX_RETRIES", 3)
-    retry_base_delay: float = _env_float("GAIA_RETRY_DELAY", 5.0)
+    retry_base_delay: float = _env_float("GAIA_RETRY_DELAY", 20.0)
+    # Model-call retries inside smolagents. On tight free tiers (e.g. Groq's
+    # 12k tokens/min) a rate limit should be absorbed here as a wait, NOT bubble
+    # up and restart the whole task -- so keep this generous.
+    model_retry_attempts: int = _env_int("GAIA_MODEL_RETRIES", 8)
+    # Proactively throttle requests/min so we stay under the provider's
+    # per-minute budget instead of hammering it and getting rate-limited.
+    # 0 disables throttling. ~1.4 keeps a 70B under Groq's 12k TPM.
+    requests_per_minute: float = _env_float("GAIA_RPM", 0.0)
 
 
 # Shared, import-time configuration instance used across the app.
@@ -105,6 +113,8 @@ def build_model(config: AgentConfig | None = None):
     import smolagents.models as _sm_models
 
     _sm_models.RETRY_WAIT = max(1, int(config.retry_base_delay))
+    # Absorb rate limits as in-place waits (see AgentConfig.model_retry_attempts).
+    _sm_models.RETRY_MAX_ATTEMPTS = max(1, config.model_retry_attempts)
 
     if provider == "hf":
         from huggingface_hub import get_token
@@ -139,6 +149,8 @@ def build_model(config: AgentConfig | None = None):
         "max_tokens": config.max_tokens,
         "num_retries": 0,  # GaiaAgent owns retry timing so it can honor Retry-After
     }
+    if config.requests_per_minute > 0:
+        kwargs["requests_per_minute"] = config.requests_per_minute
     api_key = _resolve_api_key(config.model_id)
     if api_key:
         kwargs["api_key"] = api_key
