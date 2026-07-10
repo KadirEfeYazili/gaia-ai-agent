@@ -24,7 +24,7 @@ from PIL import Image
 from smolagents import CodeAgent, VisitWebpageTool
 
 from config import CONFIG, AgentConfig, build_model
-from prompts import build_task_prompt
+from prompts import GAIA_ANSWER_RULES, build_task_prompt
 from tools import download_gaia_file, fetch_gaia_file, web_search, wikipedia_search
 
 logger = logging.getLogger("gaia.agent")
@@ -124,6 +124,12 @@ class GaiaAgent:
             try:
                 raw = self.agent.run(prompt, images=images) if images else self.agent.run(prompt)
                 answer = self._extract_final_answer(str(raw))
+                # If the run ended without a concrete answer, derive one from the
+                # reasoning it produced along the way.
+                if self._looks_unfinished(answer):
+                    derived = self._answer_from_reasoning(question)
+                    if derived:
+                        answer = derived
                 logger.info("Task %s answer: %r", task_id, answer)
                 return answer
             except Exception as exc:  # noqa: BLE001 - isolate failures per task
@@ -142,6 +148,53 @@ class GaiaAgent:
         return f"AGENT ERROR: {last_exc}"
 
     # -- helpers ------------------------------------------------------------
+    @staticmethod
+    def _looks_unfinished(answer: str) -> bool:
+        """True when the text is empty or reads as reasoning rather than an answer."""
+        text = (answer or "").strip()
+        if not text:
+            return True
+        return text.lower().startswith(
+            ("thought", "action", "observation", "```", "let's", "let me", "i will", "i'll")
+        )
+
+    def _answer_from_reasoning(self, question: str) -> str:
+        """Derive a final answer from the reasoning captured during the run.
+
+        A run occasionally ends without producing a concrete answer; the steps it
+        recorded usually still contain the needed information. This condenses those
+        steps and requests a single answer in GAIA's expected format.
+        """
+        try:
+            parts: List[str] = []
+            for step in getattr(self.agent.memory, "steps", []):
+                output = getattr(step, "model_output", None)
+                observation = getattr(step, "observations", None)
+                if output:
+                    parts.append(str(output))
+                if observation:
+                    parts.append(f"Observation: {observation}")
+            context = "\n".join(parts)[-6000:]
+            if not context:
+                return ""
+            instruction = (
+                f"Question:\n{question}\n\nResearch notes:\n{context}\n\n"
+                "Reply with only the answer: no explanation, no prefix, no trailing period. "
+                "Numbers as digits without separators or units unless asked; strings without "
+                "articles or abbreviations; lists comma-separated. If the notes are inconclusive, "
+                "give your single best answer."
+            )
+            messages = [
+                {"role": "system", "content": [{"type": "text", "text": GAIA_ANSWER_RULES}]},
+                {"role": "user", "content": [{"type": "text", "text": instruction}]},
+            ]
+            response = self.model.generate(messages)
+            text = getattr(response, "content", None) or str(response)
+            return self._extract_final_answer(str(text))
+        except Exception as exc:  # noqa: BLE001 - best-effort fallback
+            logger.warning("Could not derive answer from reasoning: %s", exc)
+            return ""
+
     def _maybe_load_image(
         self, task_id: Optional[str], file_name: Optional[str]
     ) -> Optional[List[Image.Image]]:
