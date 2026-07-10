@@ -25,7 +25,13 @@ from smolagents import CodeAgent, VisitWebpageTool
 
 from config import CONFIG, AgentConfig, build_model
 from prompts import GAIA_ANSWER_RULES, build_task_prompt
-from tools import download_gaia_file, fetch_gaia_file, web_search, wikipedia_search
+from tools import (
+    download_gaia_file,
+    fetch_gaia_file,
+    transcribe_audio,
+    web_search,
+    wikipedia_search,
+)
 
 logger = logging.getLogger("gaia.agent")
 
@@ -93,7 +99,8 @@ class GaiaAgent:
         self.model = build_model(config)
         self.agent = CodeAgent(
             model=self.model,
-            tools=[web_search, wikipedia_search, VisitWebpageTool(max_output_length=3000), fetch_gaia_file],
+            tools=[web_search, wikipedia_search, VisitWebpageTool(max_output_length=3000),
+                   fetch_gaia_file, transcribe_audio],
             additional_authorized_imports=_AUTHORIZED_IMPORTS,
             max_steps=config.max_steps,
             verbosity_level=2 if config.verbose else 0,
