@@ -6,6 +6,7 @@ show the score -- and simply swaps the placeholder ``BasicAgent`` for the real
 :class:`agent.GaiaAgent`. The Gradio UI (HF login + run button + results table)
 is preserved as required by the assignment.
 """
+import json
 import logging
 import os
 
@@ -112,6 +113,16 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
     submission_data = {"username": username.strip(), "agent_code": agent_code, "answers": answers_payload}
     status_update = f"Agent finished. Submitting {len(answers_payload)} answers for user '{username}'..."
     logger.info(status_update)
+
+    # Cache the full submission BEFORE trying to submit, so if the scoring server
+    # is down (it returns 500s intermittently) we can re-send later WITHOUT
+    # re-running the agent -- run `python submit_cached.py`. See that script.
+    try:
+        with open("answers.json", "w", encoding="utf-8") as fh:
+            json.dump(submission_data, fh, ensure_ascii=False, indent=2)
+        logger.info("Cached submission to answers.json (%d answers).", len(answers_payload))
+    except Exception as cache_exc:  # noqa: BLE001 - caching is best-effort
+        logger.warning("Could not cache answers.json: %s", cache_exc)
 
     # 5. Submit
     logger.info("Submitting %d answers to: %s", len(answers_payload), submit_url)
