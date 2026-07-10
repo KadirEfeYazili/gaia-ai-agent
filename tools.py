@@ -127,6 +127,40 @@ def download_gaia_file(task_id: str, file_name: str = "") -> str:
 
 
 @tool
+def transcribe_audio(task_id: str, file_name: str = "") -> str:
+    """Transcribe a task's attached audio file (e.g. .mp3, .wav, .m4a) to text.
+
+    Downloads the attachment and runs speech-to-text with the configured model
+    (``GAIA_TRANSCRIBE_MODEL``, default Groq ``whisper-large-v3``). Use this for
+    questions that reference a voice memo or recording, then read the returned
+    transcript to answer.
+
+    Args:
+        task_id: The GAIA task id whose audio attachment should be transcribed.
+        file_name: Original file name; used only to choose the saved extension.
+
+    Returns:
+        The transcript text, or an error message.
+    """
+    import litellm
+
+    try:
+        path = download_gaia_file(task_id, file_name)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("transcribe_audio download failed for %s: %s", task_id, exc)
+        return f"Failed to download audio for task {task_id}: {exc}"
+
+    try:
+        with open(path, "rb") as audio:
+            result = litellm.transcription(model=CONFIG.transcribe_model, file=audio)
+        text = getattr(result, "text", None) or str(result)
+        return text.strip() or "Transcription returned no text."
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("transcribe_audio failed for %s: %s", task_id, exc)
+        return f"Audio transcription failed: {exc}"
+
+
+@tool
 def fetch_gaia_file(task_id: str, file_name: str = "") -> str:
     """Download the file attached to a GAIA task and return its local path.
 
