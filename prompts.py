@@ -30,11 +30,18 @@ def build_task_prompt(
     """Compose the full prompt handed to the agent for a single GAIA task."""
     parts = [GAIA_SYSTEM_GUIDANCE]
     if file_name:
-        parts.append(
-            f'This task has an attached file named "{file_name}". '
-            f'Download it first with fetch_gaia_file(task_id="{task_id}", file_name="{file_name}") '
-            "and read its contents before answering."
-        )
+        if file_name.lower().endswith((".mp3", ".wav", ".m4a", ".ogg", ".flac")):
+            parts.append(
+                f'This task has an attached audio file named "{file_name}". '
+                f'Transcribe it first with transcribe_audio(task_id="{task_id}", file_name="{file_name}") '
+                "and use the transcript to answer."
+            )
+        else:
+            parts.append(
+                f'This task has an attached file named "{file_name}". '
+                f'Download it first with fetch_gaia_file(task_id="{task_id}", file_name="{file_name}") '
+                "and read its contents (pandas for spreadsheets, open() for text/code) before answering."
+            )
     parts.append(f"QUESTION:\n{question}")
     parts.append(GAIA_ANSWER_RULES)
     return "\n\n".join(parts)

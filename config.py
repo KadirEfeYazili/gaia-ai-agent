@@ -60,6 +60,8 @@ class AgentConfig:
     # OpenAI, Anthropic, ...), "hf" (Inference Providers) or "openai_server".
     model_provider: str = os.getenv("GAIA_MODEL_PROVIDER", "litellm")
     api_base: str | None = os.getenv("GAIA_API_BASE") or None
+    # Speech-to-text model (LiteLLM id) used by the transcribe_audio tool.
+    transcribe_model: str = os.getenv("GAIA_TRANSCRIBE_MODEL", "groq/whisper-large-v3")
     temperature: float = _env_float("GAIA_TEMPERATURE", 0.1)
     max_steps: int = _env_int("GAIA_MAX_STEPS", 6)
     max_tokens: int = _env_int("GAIA_MAX_TOKENS", 2048)
