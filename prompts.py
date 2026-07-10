@@ -14,7 +14,9 @@ web_search then visit_webpage; wikipedia_search; fetch_gaia_file for attachments
 
 # Answer-format rules adapted from the GAIA benchmark's system prompt. Keeping
 # them precise matters: the grader is exact-match.
-GAIA_ANSWER_RULES = """Call final_answer with ONLY the answer (no explanation, no trailing period):
+GAIA_ANSWER_RULES = """You MUST finish by calling the final_answer tool with your single best answer.
+Do this as soon as you know it, and even if you are unsure give your best guess -- never end without calling final_answer.
+Pass ONLY the answer (no explanation, no trailing period):
 - number: digits only, no thousands separators or units unless asked.
 - string: no articles, no abbreviations.
 - list: comma-separated with ", ", applying these rules to each item."""
